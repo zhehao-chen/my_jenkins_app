@@ -1,10 +1,5 @@
 pipeline {
-    agent { 
-        docker { 
-            image 'python:3.11-slim' 
-            args '-u root'
-        }
-    }
+    agent { label 'testing' }
 
     environment {
         BASE_VERSION = "1.0"
@@ -20,9 +15,8 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh """
-                apt-get update && apt-get install -y sqlite3
-                pip install --no-cache-dir -r requirements.txt
-                pip install playwright locust
+                pip install --break-system-packages --no-cache-dir -r requirements.txt || pip install --no-cache-dir -r requirements.txt
+                pip install --break-system-packages playwright locust || pip install playwright locust
                 """
             }
         }
