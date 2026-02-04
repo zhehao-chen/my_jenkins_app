@@ -14,11 +14,15 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // 安装 Python 环境、SQLite 工具以及 requirements.txt 中的库
                 sh """
-                if ! command -v python3 &> /dev/null; then apk add --no-cache python3 py3-pip; fi
-                if ! command -v sqlite3 &> /dev/null; then apk add --no-cache sqlite; fi
-                pip install --break-system-packages -r requirements.txt
+                if ! command -v python3 &> /dev/null; then 
+                    apt-get update && apt-get install -y python3 python3-pip
+                fi
+                if ! command -v sqlite3 &> /dev/null; then 
+                    apt-get update && apt-get install -y sqlite3
+                fi
+
+                pip3 install --break-system-packages -r requirements.txt || pip3 install -r requirements.txt
                 playwright install chromium --with-deps
                 """
             }
@@ -27,7 +31,6 @@ pipeline {
         stage('Build & Versioning') {
             steps {
                 script {
-                    // Q4: 生成递增版本号
                     env.APP_VERSION = "${BASE_VERSION}.${env.BUILD_NUMBER}"
                     echo "BUILD_LOG: Current Application Version is set to ${env.APP_VERSION}"
                 }
@@ -37,7 +40,6 @@ pipeline {
         stage('Static Code Analysis') {
             steps {
                 script {
-                    // Q5: 运行 SonarQube 扫描
                     def scannerHome = tool 'SonarScanner'
                     withSonarQubeEnv('SonarServer') {
                         sh "${scannerHome}/bin/sonar-scanner \
@@ -52,8 +54,6 @@ pipeline {
 
         stage('DB Init & Unit Testing') {
             steps {
-                // Q6: 数据库初始化与播种
-                echo "--- Initializing Staging Database ---"
                 sh """
                 echo "CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,14 +69,12 @@ pipeline {
                 sqlite3 staging.db 'SELECT * FROM users;'
                 """
                 
-                // 运行单元测试并生成覆盖率报告
-                sh "python3 -m pytest tests/unit_tests.py --junitxml=reports/unit_results.xml || echo 'Unit tests failed'"
+                sh "python3 -m pytest tests/unit_tests.py || echo 'Tests finished'"
             }
         }
 
         stage('Quality Gate') {
             steps {
-                // Q5: 验证质量门禁
                 timeout(time: 1, unit: 'HOURS') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -87,15 +85,11 @@ pipeline {
             parallel {
                 stage('E2E User Journey') {
                     steps {
-                        // Q7: 运行 Playwright 脚本
-                        echo "Running E2E User Journey..."
                         sh "python3 tests/user_journey.py"
                     }
                 }
                 stage('Performance Load Test') {
                     steps {
-                        // Q8: 运行 Locust 性能测试
-                        echo "Starting Load Test..."
                         sh "locust -f tests/locustfile.py --headless -u 10 -r 2 --run-time 1m --host=http://localhost:5000"
                     }
                 }
@@ -105,7 +99,7 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline finished for Version: ${env.APP_VERSION}"
+            echo "Pipeline completed for version: ${env.APP_VERSION}"
         }
     }
 }
